@@ -243,6 +243,7 @@
       </div>
 
       <div class="toast" id="toast"></div>
+      <div class="toast" id="fatal" style="display:none; background: rgba(255,80,110,.25); border-color: rgba(255,120,160,.35); bottom: 820px;"></div>
 
       <div class="tray">
         <div class="trayTop">
@@ -265,6 +266,14 @@
 
 <script>
 (() => {
+  // Show JS errors on-screen (helps diagnose on iPhone)
+  const fatal = document.getElementById("fatal");
+  window.addEventListener("error", (ev) => {
+    if(!fatal) return;
+    fatal.style.display = "block";
+    fatal.textContent = "JS Error: " + (ev.message || "unknown") + (ev.lineno ? (" @ line " + ev.lineno) : "");
+  });
+
   // ---------- Fit fixed stage to device width ----------
   const stage = document.getElementById("stage");
   function fitStage(){
@@ -657,9 +666,11 @@
       anchorAxial: {q:0,r:0},
       valid: false
     };
-    // Capture the pointer on the element that received pointerdown (iOS Safari requires this)
+    // Capture the pointer on the element that received pointerdown (iOS Safari requirement)
     drag.captureEl = (e.currentTarget || e.target);
-    try{ drag.captureEl && drag.captureEl.setPointerCapture && drag.captureEl.setPointerCapture(e.pointerId); }catch(_){ }
+    try{
+      drag.captureEl && drag.captureEl.setPointerCapture && drag.captureEl.setPointerCapture(e.pointerId);
+    }catch(_){}
     updateDrag(e);
   }
 
@@ -686,8 +697,11 @@
     } else {
       // no placement
     }
-    // Release capture
-    try{ drag.captureEl && drag.captureEl.releasePointerCapture && drag.captureEl.releasePointerCapture(e.pointerId); }catch(_){ }
+    
+    // Release capture (if supported)
+    try{
+      drag.captureEl && drag.captureEl.releasePointerCapture && drag.captureEl.releasePointerCapture(e.pointerId);
+    }catch(_){}
     drag = null;
     draw();
   }
@@ -700,14 +714,12 @@
     c.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       startDragFrom(i, e);
-      // Track the drag anywhere on the page (important on mobile)
+    
+      // Track the drag anywhere on the page (important on mobile Safari)
       window.addEventListener("pointermove", onMove, {passive:false});
-      window.addEventListener("pointerup", onUp, {passive:false});
-      window.addEventListener("pointercancel", onCancel, {passive:true});
-    }, {passive:false});
-  });
+      
 
-  // Board + window handle move/up (dragging across; robust on iOS)
+  // Board + window handle move/up (robust on iOS)
   function onMove(e){
     if(!drag) return;
     e.preventDefault();
@@ -717,29 +729,27 @@
     if(!drag) return;
     e.preventDefault();
     endDrag(e);
-    window.removeEventListener("pointermove", onMove, {passive:false});
-    window.removeEventListener("pointerup", onUp, {passive:false});
-    window.removeEventListener("pointercancel", onCancel, {passive:true});
+    cleanupWindowDrag();
   }
   function onCancel(e){
     if(!drag) return;
     drag = null;
     draw();
+    cleanupWindowDrag();
+  }
+  function cleanupWindowDrag(){
     window.removeEventListener("pointermove", onMove, {passive:false});
     window.removeEventListener("pointerup", onUp, {passive:false});
     window.removeEventListener("pointercancel", onCancel, {passive:true});
   }
 
-  // Board still updates ghost while inside the canvas (nice feel)
+  // Optional: keep updates if finger moves on the board canvas (helps desktop mouse too)
   boardCanvas.addEventListener("pointermove", onMove, {passive:false});
-    endDrag(e);
-  }, {passive:false});
-
-  boardCanvas.addEventListener("pointercancel", (e) => {
-    if(!drag) return;
-    drag = null;
-    draw();
-  }, {passive:true});
+window.addEventListener("pointerup", onUp, {passive:false});
+      window.addEventListener("pointercancel", onCancel, {passive:true});
+}, {passive:false});
+  });
+}, {passive:true});
 
   // ---------- Score / UI ----------
   let score = 0;
