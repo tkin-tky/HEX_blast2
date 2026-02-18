@@ -657,7 +657,9 @@
       anchorAxial: {q:0,r:0},
       valid: false
     };
-    boardCanvas.setPointerCapture(e.pointerId);
+    // Capture the pointer on the element that received pointerdown (iOS Safari requires this)
+    drag.captureEl = (e.currentTarget || e.target);
+    try{ drag.captureEl && drag.captureEl.setPointerCapture && drag.captureEl.setPointerCapture(e.pointerId); }catch(_){ }
     updateDrag(e);
   }
 
@@ -684,6 +686,8 @@
     } else {
       // no placement
     }
+    // Release capture
+    try{ drag.captureEl && drag.captureEl.releasePointerCapture && drag.captureEl.releasePointerCapture(e.pointerId); }catch(_){ }
     drag = null;
     draw();
   }
@@ -696,19 +700,38 @@
     c.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       startDragFrom(i, e);
+      // Track the drag anywhere on the page (important on mobile)
+      window.addEventListener("pointermove", onMove, {passive:false});
+      window.addEventListener("pointerup", onUp, {passive:false});
+      window.addEventListener("pointercancel", onCancel, {passive:true});
     }, {passive:false});
   });
 
-  // Board handles move/up (dragging across)
-  boardCanvas.addEventListener("pointermove", (e) => {
+  // Board + window handle move/up (dragging across; robust on iOS)
+  function onMove(e){
     if(!drag) return;
     e.preventDefault();
     updateDrag(e);
-  }, {passive:false});
-
-  boardCanvas.addEventListener("pointerup", (e) => {
+  }
+  function onUp(e){
     if(!drag) return;
     e.preventDefault();
+    endDrag(e);
+    window.removeEventListener("pointermove", onMove, {passive:false});
+    window.removeEventListener("pointerup", onUp, {passive:false});
+    window.removeEventListener("pointercancel", onCancel, {passive:true});
+  }
+  function onCancel(e){
+    if(!drag) return;
+    drag = null;
+    draw();
+    window.removeEventListener("pointermove", onMove, {passive:false});
+    window.removeEventListener("pointerup", onUp, {passive:false});
+    window.removeEventListener("pointercancel", onCancel, {passive:true});
+  }
+
+  // Board still updates ghost while inside the canvas (nice feel)
+  boardCanvas.addEventListener("pointermove", onMove, {passive:false});
     endDrag(e);
   }, {passive:false});
 
